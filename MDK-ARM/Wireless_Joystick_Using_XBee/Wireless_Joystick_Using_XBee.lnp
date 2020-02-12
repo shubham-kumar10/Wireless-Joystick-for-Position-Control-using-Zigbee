@@ -1,0 +1,26 @@
+--cpu Cortex-M7.fp.dp
+"wireless_joystick_using_xbee\startup_stm32f767xx.o"
+"wireless_joystick_using_xbee\main.o"
+"wireless_joystick_using_xbee\stm32f7xx_it.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_msp.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_cortex.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_tim.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_tim_ex.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_uart.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_rcc.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_rcc_ex.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_flash.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_flash_ex.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_gpio.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_dma.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_dma_ex.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_pwr.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_pwr_ex.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_i2c.o"
+"wireless_joystick_using_xbee\stm32f7xx_hal_i2c_ex.o"
+"wireless_joystick_using_xbee\system_stm32f7xx.o"
+--library_type=microlib --strict --scatter "Wireless_Joystick_Using_XBee\Wireless_Joystick_Using_XBee.sct"
+--summary_stderr --info summarysizes --map --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "Wireless_Joystick_Using_XBee.map" -o Wireless_Joystick_Using_XBee\Wireless_Joystick_Using_XBee.axf

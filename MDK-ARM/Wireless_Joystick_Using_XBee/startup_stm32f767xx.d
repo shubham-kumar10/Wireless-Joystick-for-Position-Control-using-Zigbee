@@ -1,0 +1,1 @@
+wireless_joystick_using_xbee\startup_stm32f767xx.o: startup_stm32f767xx.s
