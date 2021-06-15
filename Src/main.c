@@ -64,27 +64,26 @@
 /* Private variables ---------------------------------------------------------*/
 
 UART_HandleTypeDef huart6;
-uint16_t GPIO[] = {GPIO_PIN_6};
+
 /* USER CODE BEGIN PV */
-/* Tranmsitting Frames for the feedback commands
-1st Frame sends digital HIGH as feedback, 2nd sends digital LOW. */
+uint8_t BuzzerON[20]= {0x7E,0x00,0x10,0x17,0x01,0x00,0x13,0xA2,0x00,0x41,0x67,0x21,0x67,0xFF,0xFE,0x02,0x44,0x34,0x05,0x86};
+uint8_t BuzzerOFF[20]= {0x7E,0x00,0x10,0x17,0x01,0x00,0x13,0xA2,0x00,0x41,0x67,0x21,0x67,0xFF,0xFE,0x02,0x44,0x34,0x04,0x87};
 
-uint8_t BuzzerON[20]= {0x7E,0x00,0x10,0x17,0x01,0x00,0x13,0xA2,0x00,0x41,0x67,0x21,0x67,0xFF,0xFE,0x02,0x64,0x34,0x05,0x66};
-uint8_t BuzzerOFF[20]= {0x7E,0x00,0x10,0x17,0x01,0x00,0x13,0xA2,0x00,0x41,0x67,0x21,0x67,0xFF,0xFE,0x02,0x64,0x34,0x04,0x67};
-
-uint8_t data_rx_mcu[26];           		// Received Buffer Declaration
-uint16_t ack_count=0;    	         		// Acknowledge Declaration                                
+uint8_t data_rx_mcu[26];        // Received Buffer Declaration
+uint16_t ack_count=0;    	      // Acknowledge Declaration                                
 uint8_t xdata_msb,xdata_lsb; 		// 2-byte Y-axis Value
 uint8_t ydata_msb,ydata_lsb;  	// 2-byte Y-axis Value  
- 
-float X_Axis;
-float Y_Axis;
+uint8_t i=0,k=0,x_lvl=0,y_lvl=0;
+	
+float X_axis=500;
+float Y_axis=500;
 int temp;
 	
 uint32_t ref_pos=500;
-uint8_t x_pos;
-uint8_t y_pos;		
+uint8_t x_led;
+uint8_t y_led;	
 uint8_t j=0;
+uint8_t x_tmp=0,y_tmp=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,31 +91,71 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART6_UART_Init(void);
 /* USER CODE BEGIN PFP */
+double ceil(double);
 void xbeeReceive(void);
+void xbeeTransmit(void);
+void xMovement(void);
+void yMovement(void);
 void Matrix_Init(void);
 void Matrix_ON(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
 void xbeeReceive()
 {
-	HAL_UART_Receive_IT(&huart6,data_rx_mcu,26);   //Receiving packets continuously from End Point XBee (EP) 
-		int x=1;x++;
-		for(j=0;j<26;j++)
+	HAL_UART_Receive_IT(&huart6,data_rx_mcu,26);   	//Receiving packets continuously from End Point XBee (EP) 	
+}
+void xbeeTransmit()
+{
+	if(x_lvl>=8 || x_lvl ==0 || y_lvl==0 || y_lvl>=8)
+	{
+		if(HAL_UART_Transmit_IT(&huart6,BuzzerON,20) == HAL_OK)					//Sends back feedback frame to EP
 		{	
-			if(data_rx_mcu[j]== 0x7E) 		//Recognises Zigbee Header and starts processing
+			x_led = 1;
+			HAL_Delay(100);
+			if(HAL_UART_Transmit_IT(&huart6,BuzzerOFF,20) == HAL_OK)
+			{
+				x_led = 0;
+				HAL_Delay(100);
+			}
+		}
+	}
+}
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	for(j=0;j<26;j++)
+		{	
+			if(data_rx_mcu[j]== 0x7E) 									//Recognises Zigbee Header and starts processing
 			{
 				if(data_rx_mcu[(j+3)%26]== 0x92)					//Recognises Data frame sent by EP
 				{
+					//Storing previous value of X and Y axis.
+					x_tmp= X_axis;
+					y_tmp = Y_axis;
+					
+					//Combining recieved 2 byte X tilt data
 					xdata_msb = data_rx_mcu[(j+21)%26];
 					xdata_lsb = data_rx_mcu[(j+22)%26];
-					X_Axis = xdata_lsb+(xdata_msb* 256); 		//Combining 2 byte data to get ADC value
-					
+					X_axis = xdata_lsb+(xdata_msb* 256); 		
+					x_lvl = ceil(X_axis/128);
+					y_lvl = ceil(Y_axis/128);
+					//Combining recieved 2 byte Y tilt data
 					ydata_msb = data_rx_mcu[(j+23)%26];
 					ydata_lsb = data_rx_mcu[(j+24)%26];
-					Y_Axis = ydata_lsb+(ydata_msb* 256);
+					Y_axis = ydata_lsb+(ydata_msb* 256);
 					
+//					if(X_axis>1023)
+//						X_axis=x_tmp;
+//					if(Y_axis>1023)
+//						Y_axis=y_tmp;
 				}
 				else if(data_rx_mcu[(j+3)%24]== 0x97)						//Recognises Acknowledgment sent by EP 
 				{
@@ -126,66 +165,6 @@ void xbeeReceive()
 			} 
 		}
 }
-void Matrix_OFF()
-{
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_6,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_13,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOA,GPIO_PIN_15,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_7,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_5,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_3,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_RESET);
-}
-void Matrix_Init()
-{
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_6,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_13,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOA,GPIO_PIN_15,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_7,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_5,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_3,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_SET);
-	
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,GPIO_PIN_SET);	
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_2,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOF,GPIO_PIN_4,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_6,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_2,GPIO_PIN_RESET);
-		HAL_GPIO_WritePin(GPIOD,GPIO_PIN_13,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOD,GPIO_PIN_12,GPIO_PIN_SET);
-}
-void Matrix_ON()
-{
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_6,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_15,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA,GPIO_PIN_15,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_7,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_5,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_3,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA,GPIO_PIN_4,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_13,GPIO_PIN_SET);
-	
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_4,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_1,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOC,GPIO_PIN_2,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOF,GPIO_PIN_4,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_6,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOB,GPIO_PIN_2,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOD,GPIO_PIN_13,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOD,GPIO_PIN_12,GPIO_PIN_SET);
-		HAL_GPIO_WritePin(GPIOA,GPIO_PIN_5,GPIO_PIN_SET);
-}
-/* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -219,16 +198,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	xbeeReceive();
+//		//if(!(HAL_UART_GetState(&huart6) == HAL_UART_STATE_BUSY_TX))
+//			HAL_UART_Receive_IT(&huart6,data_rx_mcu,26);   	//Receiving packets continuously from End Point XBee (EP)
+//		if(x_lvl>=8)
+//			HAL_UART_Transmit(&huart6,BuzzerON,20,100);
     /* USER CODE END WHILE */
-
     /* USER CODE BEGIN 3 */
-		Matrix_OFF();
-		xbeeReceive();
-		//Matrix_Init();
-//		HAL_Delay(1000);
-//		Matrix_ON();
-//		HAL_Delay(1000);
-	}
+  }
   /* USER CODE END 3 */
 }
 
@@ -319,68 +296,9 @@ static void MX_USART6_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOF_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(R4_GPIO_Port, R4_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, R3_Pin|C1_Pin|C5_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, C8_Pin|C4_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, R2_Pin|R6_Pin|C3_Pin|C2_Pin 
-                          |C7_Pin|R1_Pin|C6_Pin|R5_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, R8_Pin|R7_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : R4_Pin */
-  GPIO_InitStruct.Pin = R4_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(R4_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : R3_Pin C1_Pin C5_Pin */
-  GPIO_InitStruct.Pin = R3_Pin|C1_Pin|C5_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : C8_Pin C4_Pin */
-  GPIO_InitStruct.Pin = C8_Pin|C4_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : R2_Pin R6_Pin C3_Pin C2_Pin 
-                           C7_Pin R1_Pin C6_Pin R5_Pin */
-  GPIO_InitStruct.Pin = R2_Pin|R6_Pin|C3_Pin|C2_Pin 
-                          |C7_Pin|R1_Pin|C6_Pin|R5_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : R8_Pin R7_Pin */
-  GPIO_InitStruct.Pin = R8_Pin|R7_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
 }
 
